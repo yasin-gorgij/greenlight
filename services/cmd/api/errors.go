@@ -1,0 +1,33 @@
+package main
+
+import (
+	"fmt"
+	"log/slog"
+	"net/http"
+)
+
+func (app *application) logError(req *http.Request, err error) {
+	app.logger.Error(err.Error(), slog.String("method", req.Method), slog.String("uri", req.URL.RequestURI()))
+}
+
+func (app *application) errorResponse(resp http.ResponseWriter, req *http.Request, status int, message any) {
+	err := app.writeJSON(resp, status, envelope{"error": message}, nil)
+	if err != nil {
+		app.logError(req, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (app *application) serverErrorResponse(resp http.ResponseWriter, req *http.Request, err error) {
+	app.logError(req, err)
+	app.errorResponse(resp, req, http.StatusInternalServerError, "The server encountered a problem and could not process your request")
+}
+
+func (app *application) notFoundErrorRespone(resp http.ResponseWriter, req *http.Request) {
+	app.errorResponse(resp, req, http.StatusNotFound, "The requested resource could not be found")
+}
+
+func (app *application) methodNotAllowedErrorResponse(resp http.ResponseWriter, req *http.Request) {
+	message := fmt.Sprintf("The %s method is not supported for this resource", req.Method)
+	app.errorResponse(resp, req, http.StatusMethodNotAllowed, message)
+}
