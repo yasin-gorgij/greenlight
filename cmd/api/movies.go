@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"greenlight/internal/data"
+	"greenlight/internal/validator"
 	"net/http"
 	"time"
 )
@@ -21,7 +22,20 @@ func (app *application) createMovieHandler(resp http.ResponseWriter, req *http.R
 		return
 	}
 
-	fmt.Fprintf(resp, "%v\n", input)
+	movie := &data.Movie{
+		Title:   input.Title,
+		Year:    input.Year,
+		Runtime: input.Runtime,
+		Genres:  input.Genres,
+	}
+
+	v := validator.New()
+	if data.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(resp, req, v.Errors)
+		return
+	}
+
+	fmt.Fprintf(resp, "%+v\n", input)
 }
 
 func (app *application) showMovieHandler(resp http.ResponseWriter, req *http.Request) {

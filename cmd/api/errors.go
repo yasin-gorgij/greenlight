@@ -35,3 +35,7 @@ func (app *application) methodNotAllowedErrorResponse(resp http.ResponseWriter, 
 func (app *application) badRequestResponse(resp http.ResponseWriter, req *http.Request, err error) {
 	app.errorResponse(resp, req, http.StatusBadRequest, err.Error())
 }
+
+func (app *application) failedValidationResponse(resp http.ResponseWriter, req *http.Request, errors map[string]string) {
+	app.errorResponse(resp, req, http.StatusUnprocessableEntity, errors)
+}
