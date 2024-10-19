@@ -31,3 +31,7 @@ func (app *application) methodNotAllowedErrorResponse(resp http.ResponseWriter, 
 	message := fmt.Sprintf("The %s method is not supported for this resource", req.Method)
 	app.errorResponse(resp, req, http.StatusMethodNotAllowed, message)
 }
+
+func (app *application) badRequestResponse(resp http.ResponseWriter, req *http.Request, err error) {
+	app.errorResponse(resp, req, http.StatusBadRequest, err.Error())
+}
