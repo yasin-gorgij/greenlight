@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"greenlight/internal/data"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,6 +29,7 @@ type config struct {
 
 type application struct {
 	config config
+	models data.Models
 	logger *slog.Logger
 }
 
@@ -41,20 +43,21 @@ func main() {
 	flag.DurationVar(&cfg.db.ConnMaxIdleTime, "db-conn-max-idle-time", 15*time.Minute, "PostgreSQL connection max idle time")
 	flag.Parse()
 
-	app := &application{
-		config: cfg,
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			AddSource: false,
-		})),
-	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false}))
 
 	db, err := openDB(cfg)
 	if err != nil {
-		app.logger.Error(err.Error())
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	defer db.Close()
-	app.logger.Info("database connection pool is established")
+	logger.Info("database connection pool is established")
+
+	app := &application{
+		config: cfg,
+		models: data.NewModels(db),
+		logger: logger,
+	}
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
