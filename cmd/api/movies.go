@@ -95,9 +95,9 @@ func (app *application) updateMovieHandler(resp http.ResponseWriter, req *http.R
 	}
 
 	var input struct {
-		Title   string   `json:"title"`
-		Year    int32    `json:"year"`
-		Runtime string   `json:"runtime"`
+		Title   *string  `json:"title"`
+		Year    *int32   `json:"year"`
+		Runtime *string  `json:"runtime"`
 		Genres  []string `json:"genres"`
 	}
 
@@ -107,10 +107,18 @@ func (app *application) updateMovieHandler(resp http.ResponseWriter, req *http.R
 		return
 	}
 
-	movie.Title = input.Title
-	movie.Year = input.Year
-	movie.Runtime = input.Runtime
-	movie.Genres = input.Genres
+	if input.Title != nil {
+		movie.Title = *input.Title
+	}
+	if input.Year != nil {
+		movie.Year = *input.Year
+	}
+	if input.Runtime != nil {
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil {
+		movie.Genres = input.Genres
+	}
 
 	v := validator.New()
 	if data.ValidateMovie(v, movie); !v.Valid() {
@@ -120,7 +128,13 @@ func (app *application) updateMovieHandler(resp http.ResponseWriter, req *http.R
 
 	err = app.models.Movies.Update(movie)
 	if err != nil {
-		app.serverErrorResponse(resp, req, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(resp, req)
+		default:
+			app.serverErrorResponse(resp, req, err)
+		}
+
 		return
 	}
 
