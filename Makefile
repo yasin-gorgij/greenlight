@@ -20,7 +20,7 @@ vulcheck: lint
 	govulncheck ./...
 
 build: vulcheck
-	go build -o greenlight ./cmd/api
+	go build -race -o greenlight ./cmd/api
 
 clean:
 	rm -f greenlight
