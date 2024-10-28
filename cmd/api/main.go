@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"greenlight/internal/data"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
@@ -67,20 +65,11 @@ func main() {
 		logger: logger,
 	}
 
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(),
-		IdleTimeout:  1 * time.Minute,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		ErrorLog:     slog.NewLogLogger(app.logger.Handler(), slog.LevelError),
+	err = app.startServer()
+	if err != nil {
+		app.logger.Error(err.Error())
+		os.Exit(1)
 	}
-
-	app.logger.Info("Starting server...", slog.String("port", server.Addr), slog.String("env", app.config.env))
-
-	err = server.ListenAndServe()
-	app.logger.Error(err.Error())
-	os.Exit(1)
 }
 
 func openDB(cfg config) (*sql.DB, error) {
