@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"greenlight/internal/data"
 	"greenlight/internal/validator"
 	"net/http"
@@ -50,13 +51,14 @@ func (app *application) registerUserHandler(resp http.ResponseWriter, req *http.
 		return
 	}
 
-	err = app.mailer.Send(user.Email, "user_welcome.tmpl.html", user)
-	if err != nil {
-		app.serverErrorResponse(resp, req, err)
-		return
-	}
+	app.background(func() {
+		err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
+		if err != nil {
+			app.logger.Error(err.Error())
+		}
+	})
 
-	err = app.writeJSON(resp, http.StatusCreated, envelope{"user": user}, nil)
+	err = app.writeJSON(resp, http.StatusAccepted, envelope{"user": user}, nil)
 	if err != nil {
 		app.serverErrorResponse(resp, req, err)
 	}
