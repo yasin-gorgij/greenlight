@@ -74,3 +74,59 @@ func (app *application) registerUserHandler(resp http.ResponseWriter, req *http.
 		app.serverErrorResponse(resp, req, err)
 	}
 }
+
+func (app *application) activateUserHandler(resp http.ResponseWriter, req *http.Request) {
+	var input struct {
+		TokenPlaintext string `json:"token"`
+	}
+
+	err := app.readJSON(resp, req, &input)
+	if err != nil {
+		app.badRequestResponse(resp, req, err)
+		return
+	}
+
+	v := validator.New()
+	if data.ValidateTokenPlaintext(v, input.TokenPlaintext); !v.Valid() {
+		app.failedValidationResponse(resp, req, v.Errors)
+		return
+	}
+
+	user, err := app.models.Users.GetForToken(data.ScopeActivation, input.TokenPlaintext)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			v.AddError("token", "invalid or expired activation token")
+			app.failedValidationResponse(resp, req, v.Errors)
+		default:
+			app.serverErrorResponse(resp, req, err)
+		}
+
+		return
+	}
+
+	user.Activated = true
+
+	err = app.models.Users.Update(user)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(resp, req)
+		default:
+			app.serverErrorResponse(resp, req, err)
+		}
+
+		return
+	}
+
+	err = app.models.Tokens.DeleteAllForUser(data.ScopeActivation, user.ID)
+	if err != nil {
+		app.serverErrorResponse(resp, req, err)
+		return
+	}
+
+	err = app.writeJSON(resp, http.StatusOK, envelope{"user": user}, nil)
+	if err != nil {
+		app.serverErrorResponse(resp, req, err)
+	}
+}
