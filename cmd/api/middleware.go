@@ -1,9 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"greenlight/internal/data"
+	"greenlight/internal/validator"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,6 +77,48 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 			mu.Unlock()
 		}
+
+		next.ServeHTTP(resp, req)
+	})
+}
+
+func (app *application) authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		resp.Header().Add("Vary", "Authorization")
+
+		authorizationHeader := req.Header.Get("Authorization")
+		if authorizationHeader == "" {
+			req = app.contextSetUser(req, data.AnonymousUser)
+			next.ServeHTTP(resp, req)
+			return
+		}
+
+		headerParts := strings.Split(authorizationHeader, " ")
+		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+			app.invalidAuthenticationTokenResponse(resp, req)
+			return
+		}
+
+		token := headerParts[1]
+		v := validator.New()
+		if data.ValidateTokenPlaintext(v, token); !v.Valid() {
+			app.invalidAuthenticationTokenResponse(resp, req)
+			return
+		}
+
+		user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
+		if err != nil {
+			switch {
+			case errors.Is(err, data.ErrRecordNotFound):
+				app.invalidAuthenticationTokenResponse(resp, req)
+			default:
+				app.serverErrorResponse(resp, req, err)
+
+			}
+			return
+		}
+
+		req = app.contextSetUser(req, user)
 
 		next.ServeHTTP(resp, req)
 	})

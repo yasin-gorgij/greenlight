@@ -8,6 +8,62 @@ import (
 	"time"
 )
 
+func (app *application) createAuthenticationTokenHandler(resp http.ResponseWriter, req *http.Request) {
+	var input struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(resp, req, &input)
+	if err != nil {
+		app.badRequestResponse(resp, req, err)
+		return
+	}
+
+	v := validator.New()
+
+	data.ValidateEmail(v, input.Email)
+	data.ValidatePasswordPlaintext(v, input.Password)
+
+	if !v.Valid() {
+		app.failedValidationResponse(resp, req, v.Errors)
+		return
+	}
+
+	user, err := app.models.Users.GetByEmail(input.Email)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.invalidCredentialsResponse(resp, req)
+		default:
+			app.serverErrorResponse(resp, req, err)
+		}
+		return
+	}
+
+	match, err := user.Password.Matches(input.Password)
+	if err != nil {
+		app.serverErrorResponse(resp, req, err)
+		return
+	}
+
+	if !match {
+		app.invalidCredentialsResponse(resp, req)
+		return
+	}
+
+	token, err := app.models.Tokens.New(user.ID, 24*time.Hour, data.ScopeAuthentication)
+	if err != nil {
+		app.serverErrorResponse(resp, req, err)
+		return
+	}
+
+	err = app.writeJSON(resp, http.StatusCreated, envelope{"authentication_token": token}, nil)
+	if err != nil {
+		app.serverErrorResponse(resp, req, err)
+	}
+}
+
 func (app *application) createActivationTokenHandler(resp http.ResponseWriter, req *http.Request) {
 	var input struct {
 		Email string `json:"email"`
