@@ -123,3 +123,50 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		next.ServeHTTP(resp, req)
 	})
 }
+
+func (app *application) requirePermission(code string, next http.HandlerFunc) http.HandlerFunc {
+	fn := func(resp http.ResponseWriter, req *http.Request) {
+		user := app.contextGetUser(req)
+
+		permissions, err := app.models.Permissions.GetAllForUser(user.ID)
+		if err != nil {
+			app.serverErrorResponse(resp, req, err)
+			return
+		}
+
+		if !permissions.Include(code) {
+			app.notPermittedResponse(resp, req)
+			return
+		}
+
+		next.ServeHTTP(resp, req)
+	}
+
+	return app.requireActivatedUser(fn)
+}
+
+func (app *application) requireActivatedUser(next http.HandlerFunc) http.HandlerFunc {
+	fn := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		user := app.contextGetUser(req)
+		if !user.Activated {
+			app.inactiveAccountResponse(resp, req)
+			return
+		}
+
+		next.ServeHTTP(resp, req)
+	})
+
+	return app.requireAuthenticatedUser(fn)
+}
+
+func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		user := app.contextGetUser(req)
+		if user.IsAnonymous() {
+			app.authenticationRequiredResponse(resp, req)
+			return
+		}
+
+		next.ServeHTTP(resp, req)
+	})
+}
