@@ -1,5 +1,7 @@
 .DEFAULT_GOAL := build
 
+BUILD_DIR=build
+
 .PHONY:fmt vet staticcheck revive lint vulcheck build
 fmt:
 	go fmt ./...
@@ -20,7 +22,8 @@ vulcheck: lint
 	govulncheck ./...
 
 build: vulcheck
-	go build -race -o greenlight ./cmd/api
+	[ -d $(BUILD_DIR) ] || mkdir -p $(BUILD_DIR)
+	go build -race -o $(BUILD_DIR)/greenlight ./cmd/api
 
 clean:
-	rm -f greenlight
+	rm -rf $(BUILD_DIR)
