@@ -170,3 +170,32 @@ func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.Han
 		next.ServeHTTP(resp, req)
 	})
 }
+
+func (app *application) enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		resp.Header().Add("Vary", "Origin")
+		resp.Header().Add("Vary", "Access-Control-Request-Method")
+
+		origin := req.Header.Get("Origin")
+		if origin != "" {
+			for i := range app.config.cors.trustedOrigins {
+				if origin == app.config.cors.trustedOrigins[i] {
+					resp.Header().Set("Access-Control-Allow-Origin", origin)
+					resp.Header().Set("Access-Control-Allow-Credentials", "true")
+
+					if req.Method == http.MethodOptions && req.Header.Get("Access-Control-Request-Method") != "" {
+						resp.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
+						resp.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+						resp.WriteHeader(http.StatusOK)
+
+						return
+
+					}
+					break
+				}
+			}
+		}
+
+		next.ServeHTTP(resp, req)
+	})
+}
