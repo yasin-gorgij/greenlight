@@ -2,7 +2,7 @@
 
 BUILD_DIR=build
 
-.PHONY:fmt vet staticcheck revive lint vulcheck build
+.PHONY:fmt vet staticcheck revive lint vulcheck build up psql
 fmt:
 	go fmt ./...
 
@@ -27,3 +27,10 @@ build: vulcheck
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+psql:
+	psql ${GREENLIGHT_DB_DSN}
+
+up:
+	@echo 'Running up migrations...'
+	migrate -path ./migrations -database ${GREENLIGHT_DB_DSN} up

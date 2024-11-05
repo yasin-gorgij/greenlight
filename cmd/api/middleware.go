@@ -2,17 +2,25 @@ package main
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
 	"greenlight/internal/data"
 	"greenlight/internal/validator"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
+
+type metricsResponseWriter struct {
+	wrapped       http.ResponseWriter
+	statusCode    int
+	headerWritten bool
+}
 
 func (app *application) recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
@@ -197,5 +205,57 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(resp, req)
+	})
+}
+
+func newMetricsResponseWriter(resp http.ResponseWriter) *metricsResponseWriter {
+	return &metricsResponseWriter{
+		wrapped:    resp,
+		statusCode: http.StatusOK,
+	}
+}
+
+func (metricsResp *metricsResponseWriter) Header() http.Header {
+	return metricsResp.wrapped.Header()
+}
+
+func (metricsResp *metricsResponseWriter) WriteHeader(statusCode int) {
+	metricsResp.wrapped.WriteHeader(statusCode)
+	if !metricsResp.headerWritten {
+		metricsResp.statusCode = statusCode
+		metricsResp.headerWritten = true
+	}
+}
+
+func (metricsResp *metricsResponseWriter) Write(b []byte) (int, error) {
+	metricsResp.headerWritten = true
+	return metricsResp.wrapped.Write(b)
+}
+
+func (metricsResp *metricsResponseWriter) Unwrap() http.ResponseWriter {
+	return metricsResp.wrapped
+}
+
+func (app *application) metrics(next http.Handler) http.Handler {
+	var (
+		totalRequestReceived            = expvar.NewInt("total_request_received")
+		totalResponsesSent              = expvar.NewInt("total_responses_sent")
+		totalProcessingTimeMicroseconds = expvar.NewInt("total_processing_time_μs")
+	)
+
+	totalResponsesSentByStatus := expvar.NewMap("total_responses_sent_by_status")
+
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		totalRequestReceived.Add(1)
+
+		metricsResp := newMetricsResponseWriter(resp)
+		next.ServeHTTP(metricsResp, req)
+
+		totalResponsesSent.Add(1)
+		totalResponsesSentByStatus.Add(strconv.Itoa(metricsResp.statusCode), 1)
+
+		duration := time.Since(start).Microseconds()
+		totalProcessingTimeMicroseconds.Add(duration)
 	})
 }
