@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"greenlight/internal/data"
 	"greenlight/internal/validator"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 )
 
@@ -63,12 +63,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		if app.config.limiter.enabled {
-
-			ip, _, err := net.SplitHostPort(req.RemoteAddr)
-			if err != nil {
-				app.serverErrorResponse(resp, req, err)
-				return
-			}
+			ip := realip.FromRequest(req)
 
 			mu.Lock()
 
